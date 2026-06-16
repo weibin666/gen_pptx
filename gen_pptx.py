@@ -42,13 +42,59 @@ R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 # --------------------------------------------------------------------------- #
 # 文本切分与排版
 # --------------------------------------------------------------------------- #
+# 分句边界：段落换行、单个换行、中英文句末标点（保留分隔符附在句子末尾）
+_SENT_SPLIT_RE = re.compile(r"(\n+|[。！？；…]+|[.!?;]+)")
+
+
+def _sentences(text):
+    """把文本按 \\n\\n / \\n / 句末标点切成句子单元，分隔符仍附在句子末尾。"""
+    pieces = _SENT_SPLIT_RE.split(text)
+    units = []
+    for i in range(0, len(pieces), 2):
+        seg = pieces[i]
+        delim = pieces[i + 1] if i + 1 < len(pieces) else ""
+        unit = seg + delim
+        if unit:
+            units.append(unit)
+    return units
+
+
 def split_text(text, size=CHUNK_SIZE):
-    """按字符长度切分；<= size 则整体返回一块。"""
+    """按句子边界切分并贪心打包，每块长度 <= size。
+
+    - <= size 的文本整体返回一块；
+    - 以 \\n\\n / \\n / 句末标点（。！？；…/.!?;）分句，句子依次累加进同一块，
+      累计超过 size 就开新块（保留 \\n 作为后续换行）；
+    - 单个句子本身超过 size 时再对该句按 size 硬切。
+    """
     if text is None:
         text = ""
     if len(text) <= size:
         return [text]
-    return [text[i:i + size] for i in range(0, len(text), size)]
+
+    chunks = []
+    cur = ""
+    for unit in _sentences(text):
+        if len(unit) > size:
+            # 单句过长：先收掉当前块，再把该句硬切
+            if cur:
+                chunks.append(cur)
+                cur = ""
+            for j in range(0, len(unit), size):
+                piece = unit[j:j + size]
+                if len(piece) == size:
+                    chunks.append(piece)
+                else:
+                    cur = piece  # 余下不足 size 的部分继续参与累加
+            continue
+        if len(cur) + len(unit) <= size:
+            cur += unit
+        else:
+            chunks.append(cur)
+            cur = unit
+    if cur:
+        chunks.append(cur)
+    return chunks
 
 
 def pick_font_size(n_chunks):
