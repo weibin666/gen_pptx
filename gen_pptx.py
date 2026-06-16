@@ -97,19 +97,8 @@ def split_text(text, size=CHUNK_SIZE):
     return chunks
 
 
-def pick_font_size(n_chunks):
-    """块越多字号越小，尽量塞进一页。"""
-    if n_chunks <= 1:
-        return 16
-    if n_chunks <= 2:
-        return 14
-    if n_chunks <= 4:
-        return 12
-    if n_chunks <= 6:
-        return 10
-    if n_chunks <= 9:
-        return 9
-    return 8
+# 文本框内字号（pt），整体固定
+FONT_SIZE = 4
 
 
 def _put_textbox(slide, chunk, left, top, width, height, font_size):
@@ -141,7 +130,7 @@ def fill_text(slide, text, slide_w, slide_h):
     # 只有一块时用整页宽，单栏即可
     if n <= 1:
         _put_textbox(slide, chunks[0], MARGIN_X, MARGIN_Y,
-                     usable_w, usable_h, pick_font_size(1))
+                     usable_w, usable_h, FONT_SIZE)
         return
 
     # 左栏在前：前一半进左栏，其余进右栏
@@ -149,9 +138,6 @@ def fill_text(slide, text, slide_w, slide_h):
     col_w = int((usable_w - col_gap) / 2)
     left_n = (n + 1) // 2
     columns = [chunks[:left_n], chunks[left_n:]]
-
-    # 字号按单栏内最多的块数决定
-    font_size = pick_font_size(max(len(c) for c in columns))
 
     for ci, col in enumerate(columns):
         m = len(col)
@@ -162,7 +148,7 @@ def fill_text(slide, text, slide_w, slide_h):
         left = MARGIN_X + ci * (col_w + col_gap)
         top = MARGIN_Y
         for chunk in col:
-            _put_textbox(slide, chunk, left, top, col_w, box_h, font_size)
+            _put_textbox(slide, chunk, left, top, col_w, box_h, FONT_SIZE)
             top = top + box_h + row_gap
 
 
