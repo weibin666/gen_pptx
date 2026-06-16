@@ -112,35 +112,58 @@ def pick_font_size(n_chunks):
     return 8
 
 
+def _put_textbox(slide, chunk, left, top, width, height, font_size):
+    """在指定位置放一个文本框，chunk 内部保留换行。"""
+    tb = slide.shapes.add_textbox(left, top, width, height)
+    tf = tb.text_frame
+    tf.word_wrap = True
+    first = True
+    for line in chunk.split("\n"):
+        p = tf.paragraphs[0] if first else tf.add_paragraph()
+        first = False
+        run = p.add_run()
+        run.text = line
+        run.font.size = Pt(font_size)
+
+
 def fill_text(slide, text, slide_w, slide_h):
-    """把 text 切块后逐块放入文本框，自上而下排列，尽量不超出页面。"""
+    """把 text 切块后放入文本框：左右两栏，左栏自上而下填满再到右栏。
+
+    两栏布局让每个文本框更高更窄，避免单列堆叠时因文字溢出而相互重叠。
+    """
     usable_w = slide_w - 2 * MARGIN_X
     usable_h = slide_h - 2 * MARGIN_Y
+    row_gap = Inches(0.1)
 
     chunks = split_text(text, CHUNK_SIZE)
     n = len(chunks)
-    font_size = pick_font_size(n)
 
-    gap = Inches(0.1)
-    total_gap = gap * (n - 1) if n > 1 else 0
-    box_h = int((usable_h - total_gap) / n)
+    # 只有一块时用整页宽，单栏即可
+    if n <= 1:
+        _put_textbox(slide, chunks[0], MARGIN_X, MARGIN_Y,
+                     usable_w, usable_h, pick_font_size(1))
+        return
 
-    top = MARGIN_Y
-    for chunk in chunks:
-        tb = slide.shapes.add_textbox(MARGIN_X, top, usable_w, box_h)
-        tf = tb.text_frame
-        tf.word_wrap = True
+    # 左栏在前：前一半进左栏，其余进右栏
+    col_gap = Inches(0.3)
+    col_w = int((usable_w - col_gap) / 2)
+    left_n = (n + 1) // 2
+    columns = [chunks[:left_n], chunks[left_n:]]
 
-        # chunk 内部保留原有换行
-        first = True
-        for line in chunk.split("\n"):
-            p = tf.paragraphs[0] if first else tf.add_paragraph()
-            first = False
-            run = p.add_run()
-            run.text = line
-            run.font.size = Pt(font_size)
+    # 字号按单栏内最多的块数决定
+    font_size = pick_font_size(max(len(c) for c in columns))
 
-        top = top + box_h + gap
+    for ci, col in enumerate(columns):
+        m = len(col)
+        if m == 0:
+            continue
+        total_gap = row_gap * (m - 1) if m > 1 else 0
+        box_h = int((usable_h - total_gap) / m)
+        left = MARGIN_X + ci * (col_w + col_gap)
+        top = MARGIN_Y
+        for chunk in col:
+            _put_textbox(slide, chunk, left, top, col_w, box_h, font_size)
+            top = top + box_h + row_gap
 
 
 # --------------------------------------------------------------------------- #
